@@ -254,21 +254,29 @@ class TextVQAAccuracyEvaluator:
                 target_question_ocr = ','.join(ocr)
                 continue
             else:
-                heuristics = heuristics + 'Question:'+ q +'\nCandidates:' + ','.join(ocr) + '\n' + 'Answer:' + ''.join(a) + '\n' + '===\n'
+                heuristics = heuristics + 'Question:'+ q +'\nCandidates:' + ','.join(ocr) + '\n' + 'Answer:'
+                for key,value in zip(list(a.keys()),list(a.values())):
+                    heuristics = heuristics + key + "(" + str(value) + ")" + ";"
+                heuristics = heuristics + '\n' + '===\n'
         heuristics = heuristics + 'Question:'+ question + '\nCandidates:' + target_question_ocr + '\n' + 'Answer:' 
         return pre_heuristics + heuristics
         
     def eval_pred_list(self, pred_list, model_llama2, question_str, all_gt_answers, ocr_tokens):
         pred_scores = []
+        unique_gt_answers = []
+        for answer in all_gt_answers:
+            unique_gt_answers.append(self._compute_answer_scores(answer))
         for entry in pred_list:
             pred_answer = self.answer_processor(entry['pred_answer'])
             unique_answer_scores = self._compute_answer_scores(
                 entry['gt_answers']
             )
+            # print("unique_gt:",unique_gt_answers)
             score = unique_answer_scores.get(pred_answer, 0.)
             if model_llama2 and score == 0:
-                prompt = self.make_prompt(question_str, ocr_tokens, all_gt_answers, entry['questions'])
+                prompt = self.make_prompt(question_str, ocr_tokens, unique_gt_answers, entry['questions'])
                 print(prompt)
+            exit()
             # print("score:",score)
             pred_scores.append(score)
 
