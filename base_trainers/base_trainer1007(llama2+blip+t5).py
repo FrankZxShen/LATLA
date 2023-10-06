@@ -12,6 +12,7 @@ from torch import optim
 # from apex import amp
 import torch.nn.functional as F
 from tqdm import tqdm
+import datetime
 
 from pythia.common.meter import Meter
 from pythia.common.registry import registry
@@ -74,7 +75,7 @@ class BaseTrainer:
                 raise RuntimeError(
                     "Unable to initialize process group: NCCL is not available"
                 )
-            torch.distributed.init_process_group(backend="nccl")
+            torch.distributed.init_process_group(backend="nccl",timeout=datetime.timedelta(seconds=5400))
             synchronize()
 
         if (
@@ -139,7 +140,12 @@ class BaseTrainer:
             and torch.cuda.device_count() > 1
             and data_parallel is True
         ):
-            self.model = torch.nn.DataParallel(self.model)
+            # self.model = torch.nn.DataParallel(self.model)
+            torch.cuda.set_device(self.local_rank)
+            self.model = torch.nn.parallel.DistributedDataParallel(
+                self.model, device_ids=[self.local_rank], output_device=self.local_rank,
+                check_reduction=True, find_unused_parameters=True
+            )
 
         if (
             "cuda" in str(self.device)
@@ -664,6 +670,7 @@ class BaseTrainer:
         with torch.no_grad():
             self.model.eval()
             ## tqdm modified
+            use_tqdm=False
             disable_tqdm = not use_tqdm or not is_main_process()
             # disable_tqdm = False
             # disable_tqdm = single_batch
@@ -672,7 +679,7 @@ class BaseTrainer:
                 print("Load Llama2")
                 self.model_llama2, self.tokenizer= build_llama2(self.config.training_parameters.llama2_path)
                 self.model_llama2.eval()
-                self.model_llama2.resize_token_embeddings(self.model_llama2.config.vocab_size + 1) 
+                # self.model_llama2.resize_token_embeddings(self.model_llama2.config.vocab_size + 1) 
             # 加载caption&qa生成模型
             if self.config.training_parameters.qa_gen:
                 print("Load Blip for caption")
@@ -702,26 +709,32 @@ class BaseTrainer:
                 prepared_batch['adv'] = False
                 # print(prepared_batch['image_name'])
                 if self.config.training_parameters.use_llama2 and self.config.training_parameters.qa_gen:
-                    model_output = self.model(prepared_batch, model_llama2=self.model_llama2, \
+                    print("Begin qa_llm inference...")
+                    model_output = self.model(prepared_batch, writer=self.writer, model_llama2=self.model_llama2, tokenizer_llama2=self.tokenizer,\
                     model_blip=self.caption_model, caption_processor=self.caption_processor, tokenizer_t5=self.question_generation_tokenizer, model_t5=self.question_generation_model, \
-                    question_str=prepared_batch['question_str'], ocr_tokens=prepared_batch['ocr_tokens'])
+                    question_str=prepared_batch['question_str'], ocr_tokens=prepared_batch['ocr_tokens'], img=prepared_batch['img'])
                     report = Report(prepared_batch, model_output)
                 elif self.config.training_parameters.use_llama2:
-                    model_output = self.model(prepared_batch, model_llama2=self.model_llama2, \
+                    print("Begin llm inference...")
+                    model_output = self.model(prepared_batch, writer=self.writer, model_llama2=self.model_llama2, tokenizer_llama2=self.tokenizer, \
                     question_str=prepared_batch['question_str'], ocr_tokens=prepared_batch['ocr_tokens'])
                     report = Report(prepared_batch, model_output)
                 elif self.config.training_parameters.qa_gen:
-                    model_output = self.model(prepared_batch, model_blip=self.caption_model, caption_processor=self.caption_processor, tokenizer_t5=self.question_generation_tokenizer, model_t5=self.question_generation_model, \
+                    print("Begin qa inference...")
+                    model_output = self.model(prepared_batch, writer=self.writer, model_blip=self.caption_model, caption_processor=self.caption_processor, tokenizer_t5=self.question_generation_tokenizer, model_t5=self.question_generation_model, \
                     question_str=prepared_batch['question_str'], ocr_tokens=prepared_batch['ocr_tokens'], img=prepared_batch['img'])
                     report = Report(prepared_batch, model_output)
                 else:
                     model_output = self.model(prepared_batch)
                     report = Report(prepared_batch, model_output)
+                print("Report Success!")
                 self.profile("Forward time")
                 self._update_meter(report, meter, eval_mode=True)
 
                 if single_batch is True:
                     break
+                
+                print("Forward Success!")
             self.model.train()
 
         return report, meter
