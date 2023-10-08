@@ -144,7 +144,7 @@ def main():
     QA = QAGeneration()
     t5_lm,t5_tokenizer= QA.load_models(t5_large_lm_adapt_path=args.t5lm,T5_large_QG_path=args.t5qa)
     with torch.no_grad():
-        cap = {"captions":[[]]}
+        cap = {"captions":[[[]]]}
         all_captions = []
         with open(args.qagen,'w') as qa_gen_file:
             qa_gen_file.write('\n')
@@ -159,7 +159,7 @@ def main():
                 continue
             # print("img_name1:",image_name[0])
             # print("img_name2:",list(single_img.keys())[0])
-            cap['captions'][0] = img_caption['captions']
+            cap['captions'][0][0] = img_caption['captions']
             single_qa_gen = QA.forward_qa_generation(cap,t5_tokenizer,t5_lm)
             single_qa_gen['image_path'] = img_caption['image_path']
             single_qa_gen['question'] = img_caption['question']
