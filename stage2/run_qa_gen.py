@@ -139,8 +139,8 @@ def main():
     parser.add_argument('-qa', '--t5qa', default='/DATACENTER1/szx/tap/data/models/T5-large-QG/T5_large_QG.pth', help='name of t5QG model to use')
     parser.add_argument('-c', '--caption', default='/DATACENTER1/szx/tap/data/mid_json/texvqa_caption_gen.json', help='path to caption file')
     parser.add_argument('-q', '--qagen', default='/DATACENTER1/szx/tap/data/mid_json/texvqa_qa_gen.json', help='path to qa file')
-
     args = parser.parse_args()
+    
     QA = QAGeneration()
     t5_lm,t5_tokenizer= QA.load_models(t5_large_lm_adapt_path=args.t5lm,T5_large_QG_path=args.t5qa)
     with torch.no_grad():
@@ -174,7 +174,5 @@ def main():
                 json.dump(single_qa_gen,qa_gen_file)
                 qa_gen_file.write('\n')
    
-
-
 if __name__ == "__main__":
     main()
