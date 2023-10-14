@@ -31,12 +31,18 @@ def create_llm_prompt(samples, num_question_per_img=30):
         samples["Task_Prompt"] = Task_Prompt
         # print(Task_Prompt)
         return Task_Prompt
+def get_pred_as(qa):
+    candidates = re.findall(r'(\w+):\s*1\.0',qa['candidates'])
+    if len(candidates) == 0:
+        return qa['pred_answer']
+    return candidates[0]
+
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-llm', '--llama2', default='/DATACENTER1/szx/tap/data/models/llama-2-7b-hf/', help='name of llm model to use')
-    parser.add_argument('-q', '--qagen', default='/DATACENTER1/szx/tap/data/mid_json/texvqa_qa_gen.json', help='path to qa file')
-    parser.add_argument('-lo', '--llmout', default='/DATACENTER1/szx/tap/data/mid_json/texvqa_llm_gen.json', help='path to qa file')
+    parser.add_argument('-q', '--qagen', default='/DATACENTER1/szx/tap/data/mid_json/texvqa_vlm_qa_gen.json', help='path to qa file')
+    parser.add_argument('-lo', '--llmout', default='/DATACENTER1/szx/tap/data/mid_json/texvqa_vlm_llm_gen.json', help='path to qa file')
     args = parser.parse_args()
     all_qa_gen = []
     with open(args.llmout,'w') as llm_out_file:
@@ -44,12 +50,15 @@ def main():
     model_llm, tokenizer = load_model(args.llama2)
     with open(args.qagen,'r') as qa_gen_file:
         for single_batch in qa_gen_file:
+            if single_batch == '\n' or single_batch == {}:
+                continue
             single_qa_gen = json.loads(single_batch)
             all_qa_gen.append(single_qa_gen)
     disable_tqdm=False
     for qa in tqdm(all_qa_gen, disable=disable_tqdm):
         context_prompt = qa["captions"][0][0]
         task_prompt = create_llm_prompt(qa)
+        qa['pred_answer'] = get_pred_as(qa)
         LLMPrompt = (
             "Context: "
             + context_prompt
@@ -59,15 +68,10 @@ def main():
             + "Question: "
             + qa["question"]
             + "\n"
-            + "Candidates: "
-            + qa['candidates']
-            + "\n"
-            + "Answer: "
+            + "Predict Answer: "
             + qa['pred_answer']
             + "\n"
-            + "The number after each candidate represents its credibility. \
-            The more credible the candidate, the more you should consider the choice. \
-            Based on the credibility and contexts above, please reason the answer to the following question without explanations.\n"
+            + "Based on the Questions and Answers above, answer the following question using a single word or phrase.\n"
             + "Question: "
             + qa["question"]
             + "\n"
@@ -101,7 +105,6 @@ def main():
         
         llm_out['llm_out'] = LLM_outputs
         print("pred:",qa['pred_answer'])
-        print("gt:",qa['candidates'])
         print("LLM:",LLM_outputs)
         print("=============================")
         with open(args.llmout,'a+') as llm_out_file:
