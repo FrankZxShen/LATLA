@@ -86,7 +86,7 @@ def generate(
     min_length: int=None, #The minimum length of the sequence to be generated, input prompt + min_new_tokens
     use_cache: bool=True,  #[optional] Whether or not the model should use the past last key/values attentions Whether or not the model should use the past last key/values attentions (if applicable to the model) to speed up decoding.
     top_p: float=1, # [optional] If set to float < 1, only the smallest set of most probable tokens with probabilities that add up to top_p or higher are kept for generation.
-    temperature: float=0.05, # [optional] The value used to modulate the next token probabilities.
+    temperature: float=0.2, # [optional] The value used to modulate the next token probabilities.
     top_k: int=50, # [optional] The number of highest probability vocabulary tokens to keep for top-k-filtering.
     num_beams=1,
     repetition_penalty: float=1.0, #The parameter for repetition penalty. 1.0 means no penalty.
@@ -98,7 +98,9 @@ def generate(
     use_fast_kernels: bool = True, # Enable using SDPA from PyTroch Accelerated Transformers, make use Flash Attention and Xformer memory-efficient kernels
     **kwargs
 ):
-    pre_prompt = "You're an assistant who can only give one word in reply. Please answer the question according to the context and answer candidates. Each answer candidate is associated with a confidence score within a bracket. The true answer may not be included in the candidate. You will not respond to anything other than that word. For example, the question is 'What chemical makes cats fly?', you would reply with only 'helium'."
+    pre_prompt = "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human\'s questions. \
+    The assistant should answer the following question based on the above contexts and answer candidates. The true answer may not be included in the candidate. \
+    The assistant will not respond to anything other than that word. For example, the question is \'what is the volume 1 about?\', you would reply with only \'the family of dashwood\'. If don't know, the reply will be \'unanswerable\'."
     user_prompt = get_prompt(user_prompt,[],pre_prompt)
     # print([user_prompt])
     batch = tokenizer([user_prompt], padding='max_length', add_special_tokens=False, return_tensors="pt").to(model.device)
@@ -121,6 +123,11 @@ def generate(
     index = output_text.find("[/INST]")
     index += 2
     output_llm = output_text[index + len("[/INST]"):]
+    try: 
+        if output_llm[-1] == '.':
+            output_llm = output_llm[:-1]
+    except:
+        output_llm = 'unanswerable'
     index_result = output_llm.find("Answer:")
     # print(output_llm)
     if index_result == -1:
