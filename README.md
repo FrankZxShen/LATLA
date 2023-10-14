@@ -25,3 +25,6 @@ Finish runqa and runllm.
 ### 23.10.09
 
 Rename to LATLA.
+
+### 23.10.14
+Update stage2 and base_trainer. fit amazon.
