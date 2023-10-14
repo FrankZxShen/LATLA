@@ -1,3 +1,7 @@
+
+import os
+os.environ["CUDA_VISIBLE_DEVICES"]='1'
+
 from PIL import Image
 import argparse
 from tqdm import tqdm
@@ -5,6 +9,7 @@ from typing import List, Optional
 import spacy
 import torch
 import gc
+
 from transformers import (
     AutoProcessor, AutoModelForCausalLM, BlipForConditionalGeneration, T5ForConditionalGeneration, T5Tokenizer, 
     logging
@@ -31,64 +36,64 @@ class QAGeneration:
         self.model_t5.load_state_dict(state_dict)
         return self.model_t5,self.tokenizer_t5
     def answer_extraction(self, caption, num_question_generation=20):
-            cap_use = ""
-            # print(caption)
-            caption = caption
-            ans_to_cap_dict = {}
-            answers = []
-            for cap_idx, cap in enumerate(caption):
-                # print(cap)
-                cap_use += cap
-                cap = cap.strip().strip(".")
-                # print(cap)
-                cap = self.nlp(cap)
-                for token in cap:  # Noun /Verb/Adj//NUM
-                    if token.pos_ in open_pos:
-                        if token.text.lower() not in ans_to_cap_dict:
-                            ans_to_cap_dict[token.text.lower()] = [cap_idx]
-                        else:
-                            if cap_idx not in ans_to_cap_dict[token.text.lower()]:
-                                ans_to_cap_dict[token.text.lower()].append(cap_idx)
-                        answers.append(token.text)
-                for ent in cap.ents:
+        cap_use = ""
+        # print(caption)
+        caption = caption
+        ans_to_cap_dict = {}
+        answers = []
+        for cap_idx, cap in enumerate(caption):
+            # print(cap)
+            cap_use += cap
+            cap = cap.strip().strip(".")
+            # print(cap)
+            cap = self.nlp(cap)
+            for token in cap:  # Noun /Verb/Adj//NUM
+                if token.pos_ in open_pos:
+                    if token.text.lower() not in ans_to_cap_dict:
+                        ans_to_cap_dict[token.text.lower()] = [cap_idx]
+                    else:
+                        if cap_idx not in ans_to_cap_dict[token.text.lower()]:
+                            ans_to_cap_dict[token.text.lower()].append(cap_idx)
+                    answers.append(token.text)
+            for ent in cap.ents:
 
-                    if ent.text not in answers:
-                        if ent.text.lower() not in ans_to_cap_dict:
-                            ans_to_cap_dict[ent.text.lower()] = [cap_idx]
-                        else:
-                            if cap_idx not in ans_to_cap_dict[ent.text.lower()]:
-                                ans_to_cap_dict[ent.text.lower()].append(cap_idx)
-                        answers.append(ent.text)
-                for chunk in cap.noun_chunks:
-                    if len(chunk.text.split()) < 4:
-                        if chunk.text.lower() not in ans_to_cap_dict:
-                            ans_to_cap_dict[chunk.text.lower()] = [cap_idx]
-                        else:
-                            if cap_idx not in ans_to_cap_dict[chunk.text.lower()]:
-                                ans_to_cap_dict[chunk.text.lower()].append(cap_idx)
-                        #                 print(chunk.text)
-                        answers.append(chunk.text)
-            answers = sorted(answers, key=answers.count, reverse=True)
-            real_answers = []
-            for i in answers:
-                i = i + "."
-                if i not in real_answers:
-                    real_answers.append(i)
+                if ent.text not in answers:
+                    if ent.text.lower() not in ans_to_cap_dict:
+                        ans_to_cap_dict[ent.text.lower()] = [cap_idx]
+                    else:
+                        if cap_idx not in ans_to_cap_dict[ent.text.lower()]:
+                            ans_to_cap_dict[ent.text.lower()].append(cap_idx)
+                    answers.append(ent.text)
+            for chunk in cap.noun_chunks:
+                if len(chunk.text.split()) < 4:
+                    if chunk.text.lower() not in ans_to_cap_dict:
+                        ans_to_cap_dict[chunk.text.lower()] = [cap_idx]
+                    else:
+                        if cap_idx not in ans_to_cap_dict[chunk.text.lower()]:
+                            ans_to_cap_dict[chunk.text.lower()].append(cap_idx)
+                    #                 print(chunk.text)
+                    answers.append(chunk.text)
+        answers = sorted(answers, key=answers.count, reverse=True)
+        real_answers = []
+        for i in answers:
+            i = i + "."
+            if i not in real_answers:
+                real_answers.append(i)
 
-            contexts_for_question_generation = []
-            answers = []
-            for ans in real_answers[
-                :num_question_generation
-            ]:  # Generate questions for 15 answers with max frequencies.
-                contexts_for_question_generation.append(
-                    "answer: %s  context: %s." % (ans, cap_use)
-                )
-                answers.append(ans)
+        contexts_for_question_generation = []
+        answers = []
+        for ans in real_answers[
+            :num_question_generation
+        ]:  # Generate questions for 15 answers with max frequencies.
             contexts_for_question_generation.append(
-                "answer: %s  context: %s." % ("yes.", cap_use)
+                "answer: %s  context: %s." % (ans, cap_use)
             )
-            answers.append("yes.")
-            return contexts_for_question_generation, answers, ans_to_cap_dict
+            answers.append(ans)
+        contexts_for_question_generation.append(
+            "answer: %s  context: %s." % ("yes.", cap_use)
+        )
+        answers.append("yes.")
+        return contexts_for_question_generation, answers, ans_to_cap_dict
         
     # QA gen
     def forward_qa_generation(self, samples, question_generation_tokenizer, question_generation_model):
@@ -137,19 +142,23 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-lm', '--t5lm', default='/DATACENTER1/szx/tap/data/models/t5-large-lm-adapt/', help='name of t5lm model to use')
     parser.add_argument('-qa', '--t5qa', default='/DATACENTER1/szx/tap/data/models/T5-large-QG/T5_large_QG.pth', help='name of t5QG model to use')
-    parser.add_argument('-c', '--caption', default='/DATACENTER1/szx/tap/data/mid_json/texvqa_caption_gen.json', help='path to caption file')
-    parser.add_argument('-q', '--qagen', default='/DATACENTER1/szx/tap/data/mid_json/texvqa_qa_gen.json', help='path to qa file')
+    parser.add_argument('-c', '--caption', default='/DATACENTER1/szx/tap/data/mid_json/texvqa_caption_vlm_gen.json', help='path to caption file')
+    parser.add_argument('-q', '--qagen', default='/DATACENTER1/szx/tap/data/mid_json/texvqa_vlm_qa_gen.json', help='path to qa file')
     args = parser.parse_args()
     
     QA = QAGeneration()
     t5_lm,t5_tokenizer= QA.load_models(t5_large_lm_adapt_path=args.t5lm,T5_large_QG_path=args.t5qa)
-    with torch.no_grad():
-        cap = {"captions":[[[]]]}
+    with torch.inference_mode():
+        cap = {"captions":[[None,None]]}
+        all_captions_blip = []
+        all_captions_vlm = []
         all_captions = []
         with open(args.qagen,'w') as qa_gen_file:
             qa_gen_file.write('\n')
         with open(args.caption,'r') as caption_file:
             for img_captions in caption_file:
+                if img_captions == '\n':
+                    continue
                 img_caption = json.loads(img_captions)
                 all_captions.append(img_caption)
                 # print(img_caption)
@@ -159,7 +168,8 @@ def main():
                 continue
             # print("img_name1:",image_name[0])
             # print("img_name2:",list(single_img.keys())[0])
-            cap['captions'][0][0] = img_caption['captions']
+            cap['captions'][0][0] = img_caption['blip_captions']
+            cap['captions'][0][1] = img_caption['vlm_captions']
             single_qa_gen = QA.forward_qa_generation(cap,t5_tokenizer,t5_lm)
             single_qa_gen['image_path'] = img_caption['image_path']
             single_qa_gen['question'] = img_caption['question']
