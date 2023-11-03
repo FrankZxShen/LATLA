@@ -28,3 +28,7 @@ Rename to LATLA.
 
 ### 23.10.14
 Update stage2 and base_trainer. fit amazon.
+
+### 23.11.03
+Change 2 stage3
+Stop update
